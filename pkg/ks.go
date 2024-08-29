@@ -27,8 +27,11 @@ func ParseKolmogorovSmirnovResult(s string) (KolmogorovSmirnovResult, error) {
 	if fields == nil {
 		return k, fmt.Errorf("ParseKS: parsing error; %v", s)
 	}
-	_, e := csvh.Scan(fields, &k.Statistic, &k.PValue, &k.StatisticLocation, &k.StatisticSign)
-	return k, e
+	n, e := csvh.Scan(fields[1:], &k.Statistic, &k.PValue, &k.StatisticLocation, &k.StatisticSign)
+	if e != nil {
+		return k, fmt.Errorf("ParseKS: nread %v; input %v; field %v; %w", n, s, fields, e)
+	}
+	return k, nil
 }
 
 func KolmogorovSmirnovChi2(data iter.Seq[float64]) (KolmogorovSmirnovResult, error) {
@@ -38,6 +41,10 @@ func KolmogorovSmirnovChi2(data iter.Seq[float64]) (KolmogorovSmirnovResult, err
 	cmd.Stderr = os.Stderr
 	inp, e := cmd.StdinPipe()
 	if e != nil {
+		return KolmogorovSmirnovResult{}, e
+	}
+
+	if e = cmd.Start(); e != nil {
 		return KolmogorovSmirnovResult{}, e
 	}
 
@@ -55,8 +62,11 @@ func KolmogorovSmirnovChi2(data iter.Seq[float64]) (KolmogorovSmirnovResult, err
 		errc <- nil
 	}()
 
-	e = cmd.Start()
-	if e != nil {
+	if e := cmd.Wait(); e != nil {
+		return KolmogorovSmirnovResult{}, e
+	}
+
+	if e := <-errc; e != nil {
 		return KolmogorovSmirnovResult{}, e
 	}
 
@@ -64,5 +74,6 @@ func KolmogorovSmirnovChi2(data iter.Seq[float64]) (KolmogorovSmirnovResult, err
 	if e != nil {
 		return KolmogorovSmirnovResult{}, e
 	}
-	return res, cmd.Wait()
+
+	return res, e
 }
