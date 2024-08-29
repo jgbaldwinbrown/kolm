@@ -1,6 +1,7 @@
 package kolm
 
 import (
+	"math"
 	"strings"
 	"fmt"
 	"os/exec"
@@ -34,7 +35,18 @@ func ParseKolmogorovSmirnovResult(s string) (KolmogorovSmirnovResult, error) {
 	return k, nil
 }
 
+func StripNaNInf(it iter.Seq[float64]) iter.Seq[float64] {
+	return func(y func(float64) bool) {
+		for x := range it {
+			if !math.IsNaN(x) && !math.IsInf(x, 0) && !y(x) {
+				return
+			}
+		}
+	}
+}
+
 func KolmogorovSmirnovChi2(data iter.Seq[float64]) (KolmogorovSmirnovResult, error) {
+	data2 := StripNaNInf(data)
 	cmd := exec.Command("kstest.py")
 	var b strings.Builder
 	cmd.Stdout = &b
@@ -50,7 +62,7 @@ func KolmogorovSmirnovChi2(data iter.Seq[float64]) (KolmogorovSmirnovResult, err
 
 	errc := make(chan error, 1)
 	go func() {
-		for val := range data {
+		for val := range data2 {
 			_, e := fmt.Fprintln(inp, val)
 			if e != nil {
 				errc <- e
